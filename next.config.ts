@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   // },
   // Cloudflare-specific config
   trailingSlash: true,
+  turbopack: {},
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
