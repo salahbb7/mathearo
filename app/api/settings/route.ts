@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         const contentType = request.headers.get('content-type') || '';
 
         if (contentType.includes('application/json')) {
-            body = await request.json();
+            body = await request.json() as any;
         } else if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
             const formData = await request.formData();
             for (const [key, value] of formData.entries()) {

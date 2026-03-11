@@ -8,7 +8,7 @@ export async function PUT(
 ) {
     try {
         const db = await getDB();
-        const body = await request.json();
+        const body = await request.json() as any;
         const { id } = await params;
 
         const user = await db

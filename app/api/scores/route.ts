@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
 
         const teacherId = (session.user as any).id;
         const db = await getDB();
-        const body = await request.json();
+        const body = await request.json() as any;
 
         if (!body.studentId && !body.studentName) {
             return NextResponse.json({ error: 'studentId or studentName is required' }, { status: 400 });

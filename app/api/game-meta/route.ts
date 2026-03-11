@@ -21,7 +21,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     try {
         const db = await getDB();
-        const body = await request.json();
+        const body = await request.json() as any;
         const { gameId, imageUrl } = body;
 
         if (!gameId) {
