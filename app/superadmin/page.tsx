@@ -7,11 +7,11 @@ import { GAMES } from '@/lib/constants';
 import { type Difficulty, getDifficultyLabel, getDifficultyColor } from '@/lib/difficulty';
 
 interface User {
-    _id: string;
+    id: string;
     name: string;
     email: string;
     role: string;
-    isActive: boolean;
+    isActive: boolean | number;
     plan: 'test' | 'pro';
     statistics?: {
         classCount: number;
@@ -60,7 +60,7 @@ export default function SuperAdminPage() {
     const fetchSettings = async () => {
         try {
             const res = await fetch('/api/settings');
-            const data = await res.json();
+            const data = await res.json() as any;
             setSettingsForm({
                 whatsappNumber: data.whatsappNumber || '',
                 difficulty: data.difficulty || 'medium',
@@ -69,11 +69,10 @@ export default function SuperAdminPage() {
             console.error('Error fetching settings:', e);
         }
     };
-
     const fetchGameImages = async () => {
         try {
             const res = await fetch('/api/game-meta');
-            const data = await res.json();
+            const data = await res.json() as Record<string, string>;
             setGameImages(data);
         } catch (e) {
             console.error('Error fetching game images:', e);
@@ -104,7 +103,7 @@ export default function SuperAdminPage() {
             fd.append('gameId', gameId);
             fd.append('image', file);
             const res = await fetch('/api/game-meta', { method: 'POST', body: fd });
-            const data = await res.json();
+            const data = await res.json() as { imageUrl: string };
             setGameImages(prev => ({ ...prev, [gameId]: data.imageUrl }));
         } catch (e) {
             alert('❌ فشل رفع الصورة');
@@ -117,7 +116,7 @@ export default function SuperAdminPage() {
         try {
             setLoading(true);
             const res = await fetch('/api/users');
-            const data = await res.json();
+            const data = await res.json() as User[];
             setUsers(data);
         } catch (error) {
             console.error('Error fetching users:', error);
@@ -126,7 +125,7 @@ export default function SuperAdminPage() {
         }
     };
 
-    const handleToggleActive = async (id: string, currentStatus: boolean) => {
+    const handleToggleActive = async (id: string, currentStatus: boolean | number) => {
         try {
             const res = await fetch(`/api/users/${id}`, {
                 method: 'PUT',
@@ -147,7 +146,7 @@ export default function SuperAdminPage() {
         e.preventDefault();
         setSaving(true);
         try {
-            const url = editingUser ? `/api/users/${editingUser._id}` : '/api/users';
+            const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
             const method = editingUser ? 'PUT' : 'POST';
 
             const payload: any = {
@@ -167,7 +166,7 @@ export default function SuperAdminPage() {
             });
 
             if (!res.ok) {
-                const error = await res.json();
+                const error = await res.json() as { error?: string };
                 throw new Error(error.error || 'فشلت العملية');
             }
 
@@ -270,7 +269,7 @@ export default function SuperAdminPage() {
                     </thead>
                     <tbody>
                         {users.map((user) => (
-                            <tr key={user._id} className="border-b border-slate-200 hover:bg-white transition-colors">
+                            <tr key={user.id} className="border-b border-slate-200 hover:bg-white transition-colors">
                                 <td className="px-6 py-4">
                                     <div className="font-bold text-slate-900">{user.name}</div>
                                     <div className="text-xs text-slate-500 font-mono" dir="ltr">{user.email}</div>
@@ -294,7 +293,7 @@ export default function SuperAdminPage() {
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                     <button
-                                        onClick={() => handleToggleActive(user._id, user.isActive)}
+                                        onClick={() => handleToggleActive(user.id, user.isActive)}
                                         className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${user.isActive ? 'bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200' : 'bg-red-100 text-red-800 border-red-200 hover:bg-red-200'}`}
                                     >
                                         {user.isActive ? '✅ نشط' : '❌ معطل'}
@@ -324,7 +323,7 @@ export default function SuperAdminPage() {
                                             ✏️ تعديل
                                         </button>
                                         <button
-                                            onClick={() => handleDeleteUser(user._id)}
+                                            onClick={() => handleDeleteUser(user.id)}
                                             className="text-red-500 hover:bg-red-50 p-2 rounded-xl transition-colors font-bold text-sm flex items-center gap-1"
                                             title="حذف"
                                             disabled={user.email === session?.user?.email}

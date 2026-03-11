@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 interface Score {
-    _id: string;
+    id: string;
     studentName: string;
     score: number;
     totalQuestions: number;
@@ -21,7 +21,7 @@ interface Settings {
 }
 
 interface User {
-    _id: string;
+    id: string;
     name: string;
     email: string;
     role: string;
@@ -75,7 +75,7 @@ export default function AdminPage() {
     const fetchScores = async () => {
         try {
             const res = await fetch('/api/scores');
-            const data = await res.json();
+            const data = await res.json() as Score[];
             setScores(data);
         } catch (error) {
             console.error('Error fetching scores:', error);
@@ -87,7 +87,7 @@ export default function AdminPage() {
     const fetchSettings = async () => {
         try {
             const res = await fetch('/api/settings');
-            const data = await res.json();
+            const data = await res.json() as Settings;
             setSettings(data);
         } catch (error) {
             console.error('Error fetching settings:', error);
@@ -97,7 +97,7 @@ export default function AdminPage() {
     const fetchUsers = async () => {
         try {
             const res = await fetch('/api/users');
-            const data = await res.json();
+            const data = await res.json() as User[];
             setUsers(data);
         } catch (error) {
             console.error('Error fetching users:', error);
@@ -118,7 +118,7 @@ export default function AdminPage() {
             });
 
             if (res.ok) {
-                const updatedSettings = await res.json();
+                const updatedSettings = await res.json() as Settings;
                 setSettings(updatedSettings);
                 setSelectedFiles({});
                 setFormKey(prev => prev + 1);
@@ -139,7 +139,7 @@ export default function AdminPage() {
         setSaving(true);
 
         try {
-            const url = editingUser ? `/api/users/${editingUser._id}` : '/api/users';
+            const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
             const method = editingUser ? 'PUT' : 'POST';
 
             const res = await fetch(url, {
@@ -149,7 +149,7 @@ export default function AdminPage() {
             });
 
             if (!res.ok) {
-                const error = await res.json();
+                const error = await res.json() as { error?: string };
                 throw new Error(error.error || 'فشلت العملية');
             }
 
@@ -285,7 +285,7 @@ export default function AdminPage() {
                                             const percentage = Math.round((score.score / score.totalQuestions) * 100);
                                             const bgColor = percentage >= 80 ? 'bg-green-50' : percentage >= 60 ? 'bg-blue-50' : 'bg-red-50';
                                             return (
-                                                <tr key={score._id} className={`${bgColor} border-b border-gray-200 hover:bg-opacity-70 transition-colors`}>
+                                                <tr key={score.id} className={`${bgColor} border-b border-gray-200 hover:bg-opacity-70 transition-colors`}>
                                                     <td className="px-4 py-3 font-bold text-gray-700">{index + 1}</td>
                                                     <td className="px-4 py-3 font-bold text-gray-800">{score.studentName}</td>
                                                     <td className="px-4 py-3 text-center font-bold text-lg">{score.score} / {score.totalQuestions}</td>
@@ -334,7 +334,7 @@ export default function AdminPage() {
                                 </thead>
                                 <tbody>
                                     {users.map((user) => (
-                                        <tr key={user._id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                                        <tr key={user.id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                                             <td className="px-4 py-3 font-bold text-gray-800">{user.name}</td>
                                             <td className="px-4 py-3 text-gray-600 font-mono" dir="ltr">{user.email}</td>
                                             <td className="px-4 py-3 text-center">
@@ -356,7 +356,7 @@ export default function AdminPage() {
                                                         ✏️
                                                     </button>
                                                     <button
-                                                        onClick={() => handleDeleteUser(user._id)}
+                                                        onClick={() => handleDeleteUser(user.id)}
                                                         className="bg-red-400 hover:bg-red-500 text-white p-2 rounded-lg shadow-sm transition-colors"
                                                         title="حذف"
                                                     >

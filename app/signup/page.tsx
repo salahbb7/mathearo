@@ -40,7 +40,7 @@ export default function SignupPage() {
                 body: JSON.stringify({ name, email, password, confirmPassword }),
             });
 
-            const data = await res.json();
+            const data = await res.json() as { error?: string };
 
             if (!res.ok) {
                 setError(data.error || 'حدث خطأ أثناء إنشاء الحساب');
