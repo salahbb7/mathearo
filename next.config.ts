@@ -7,6 +7,13 @@ const nextConfig: NextConfig = {
   // },
   // Cloudflare-specific config
   trailingSlash: true,
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      '@vercel/og': false,
+    };
+    return config;
+  },
 };
 
 export default nextConfig;
