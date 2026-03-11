@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "mathearo-app",
+  "name": "mathearo",
   "main": ".open-next/worker.js",
   "minify": true,
   "compatibility_date": "2025-01-01",
