@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3080",
-    "build": "next build",
+    "build": "opennextjs-cloudflare build",
+    "build:next": "next build",
     "start": "next start -p 3080",
-    "lint": "eslint",
-    "pages:build": "opennextjs-cloudflare build"
+    "lint": "eslint"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
