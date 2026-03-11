@@ -28,7 +28,7 @@ export default function GamesClient({ students, classes, plan, userName }: { stu
     useEffect(() => {
         fetch('/api/game-meta')
             .then(r => r.json())
-            .then(data => setGameImages(data))
+            .then(data => setGameImages(data as Record<string, string>))
             .catch(() => {});
     }, []);
 

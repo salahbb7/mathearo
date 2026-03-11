@@ -22,8 +22,9 @@ export default function SettingsClient({ initialSettings }: { initialSettings: T
     useEffect(() => {
         fetch('/api/settings')
             .then((r) => r.json())
-            .then((data) => {
-                setMusicVolume(data.backgroundMusicVolume ?? 50);
+            .then((data: unknown) => {
+                const d = data as Record<string, unknown>;
+                setMusicVolume((d.backgroundMusicVolume as number) ?? 50);
                 setVolumeLoaded(true);
             })
             .catch(() => setVolumeLoaded(true));
