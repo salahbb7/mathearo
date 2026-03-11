@@ -40,7 +40,7 @@ export default function RobotSorterGamePage() {
     useEffect(() => {
         fetch('/api/settings')
             .then((res) => res.json())
-            .then((data) => setSettings(data))
+            .then((data: unknown) => setSettings(data as Parameters<typeof setSettings>[0]))
             .catch((err) => console.error('Error loading settings:', err));
     }, []);
 
