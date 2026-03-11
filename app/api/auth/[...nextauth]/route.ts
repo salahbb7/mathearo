@@ -1,7 +1,6 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { connectDB } from '@/lib/db';
-import Teacher from '@/models/Teacher';
+import { getDB } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 export const authOptions: NextAuthOptions = {
@@ -9,23 +8,26 @@ export const authOptions: NextAuthOptions = {
         CredentialsProvider({
             name: 'Credentials',
             credentials: {
-                email: { label: "البريد الإلكتروني", type: "email" },
-                password: { label: "كلمة المرور", type: "password" }
+                email: { label: 'البريد الإلكتروني', type: 'email' },
+                password: { label: 'كلمة المرور', type: 'password' },
             },
             async authorize(credentials) {
                 if (!credentials?.email || !credentials?.password) {
                     throw new Error('يرجى إدخال البريد الإلكتروني وكلمة المرور');
                 }
 
-                await connectDB();
+                const db = await getDB();
 
-                const teacher = await Teacher.findOne({ email: credentials.email });
+                const teacher = await db
+                    .prepare('SELECT * FROM teachers WHERE email = ? LIMIT 1')
+                    .bind(credentials.email.toLowerCase().trim())
+                    .first<any>();
 
                 if (!teacher || !teacher.password) {
                     throw new Error('البريد الإلكتروني أو كلمة المرور غير صحيحة');
                 }
 
-                if (teacher.isActive === false) {
+                if (teacher.isActive === 0) {
                     throw new Error('هذا الحساب معطل. يرجى التواصل مع الإدارة.');
                 }
 
@@ -36,14 +38,14 @@ export const authOptions: NextAuthOptions = {
                 }
 
                 return {
-                    id: teacher._id.toString(),
+                    id: teacher.id,
                     email: teacher.email,
                     name: teacher.name,
                     role: teacher.role || 'teacher',
                     plan: teacher.plan || 'test',
                 };
-            }
-        })
+            },
+        }),
     ],
     session: {
         strategy: 'jwt',

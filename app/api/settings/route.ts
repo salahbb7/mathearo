@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
-import GameSettings from '@/models/GameSettings';
+import { getDB } from '@/lib/db';
 
 export async function GET() {
     try {
-        await connectDB();
+        const db = await getDB();
 
-        let settings = await GameSettings.findOne();
+        let settings = await db
+            .prepare('SELECT * FROM game_settings WHERE id = ? LIMIT 1')
+            .bind('global')
+            .first<any>();
 
         if (!settings) {
-            settings = await GameSettings.create({
-                successSoundUrl: '',
-                errorSoundUrl: '',
-                backgroundMusicUrl: '',
-                backgroundMusicVolume: 50,
-            });
+            const now = new Date().toISOString();
+            await db
+                .prepare(
+                    'INSERT INTO game_settings (id, successSoundUrl, errorSoundUrl, backgroundMusicUrl, backgroundMusicVolume, difficulty, whatsappNumber, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                )
+                .bind('global', '', '', '', 50, 'medium', '96871776166', now)
+                .run();
+            settings = { id: 'global', successSoundUrl: '', errorSoundUrl: '', backgroundMusicUrl: '', backgroundMusicVolume: 50, difficulty: 'medium', whatsappNumber: '96871776166', updatedAt: now };
         }
 
         return NextResponse.json(settings);
@@ -26,7 +30,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
-        await connectDB();
+        const db = await getDB();
 
         let body: Record<string, unknown> = {};
         const contentType = request.headers.get('content-type') || '';
@@ -40,33 +44,30 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        let settings = await GameSettings.findOne();
-        if (!settings) {
-            settings = new GameSettings({});
+        const now = new Date().toISOString();
+
+        const existing = await db.prepare('SELECT * FROM game_settings WHERE id = ? LIMIT 1').bind('global').first<any>();
+
+        if (!existing) {
+            await db
+                .prepare('INSERT INTO game_settings (id, successSoundUrl, errorSoundUrl, backgroundMusicUrl, backgroundMusicVolume, difficulty, whatsappNumber, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                .bind('global', '', '', '', 50, 'medium', '96871776166', now)
+                .run();
         }
 
-        if (body.successSoundUrl !== undefined) settings.successSoundUrl = body.successSoundUrl;
-        if (body.errorSoundUrl !== undefined) settings.errorSoundUrl = body.errorSoundUrl;
-        if (body.backgroundMusicUrl !== undefined) settings.backgroundMusicUrl = body.backgroundMusicUrl;
+        const successSoundUrl = body.successSoundUrl !== undefined ? body.successSoundUrl : existing?.successSoundUrl || '';
+        const errorSoundUrl = body.errorSoundUrl !== undefined ? body.errorSoundUrl : existing?.errorSoundUrl || '';
+        const backgroundMusicUrl = body.backgroundMusicUrl !== undefined ? body.backgroundMusicUrl : existing?.backgroundMusicUrl || '';
+        const backgroundMusicVolume = body.backgroundMusicVolume !== undefined ? Math.min(100, Math.max(0, parseFloat(body.backgroundMusicVolume as string) || 50)) : existing?.backgroundMusicVolume || 50;
+        const difficulty = (body.difficulty && ['easy', 'medium', 'hard'].includes(body.difficulty as string)) ? body.difficulty : (existing?.difficulty || 'medium');
+        const whatsappNumber = body.whatsappNumber !== undefined ? (body.whatsappNumber as string).trim() : (existing?.whatsappNumber || '96871776166');
 
-        if (body.backgroundMusicVolume !== undefined) {
-            const vol = parseFloat(body.backgroundMusicVolume as string);
-            if (!isNaN(vol)) {
-                settings.backgroundMusicVolume = Math.min(100, Math.max(0, vol));
-            }
-        }
+        await db
+            .prepare('UPDATE game_settings SET successSoundUrl=?, errorSoundUrl=?, backgroundMusicUrl=?, backgroundMusicVolume=?, difficulty=?, whatsappNumber=?, updatedAt=? WHERE id=?')
+            .bind(successSoundUrl, errorSoundUrl, backgroundMusicUrl, backgroundMusicVolume, difficulty, whatsappNumber, now, 'global')
+            .run();
 
-        if (body.difficulty && ['easy', 'medium', 'hard'].includes(body.difficulty as string)) {
-            settings.difficulty = body.difficulty as 'easy' | 'medium' | 'hard';
-        }
-
-        if (body.whatsappNumber !== undefined) {
-            settings.whatsappNumber = (body.whatsappNumber as string).trim();
-        }
-
-        await settings.save();
-
-        return NextResponse.json(settings);
+        return NextResponse.json({ id: 'global', successSoundUrl, errorSoundUrl, backgroundMusicUrl, backgroundMusicVolume, difficulty, whatsappNumber, updatedAt: now });
     } catch (error) {
         console.error('Error updating settings:', error);
         return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });

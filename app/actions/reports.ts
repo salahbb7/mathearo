@@ -1,30 +1,38 @@
 'use server';
 
-import { connectDB } from '@/lib/db';
-import GameSession from '@/models/GameSession';
-import Student from '@/models/Student';
+import { getDB } from '@/lib/db';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 async function getTeacherId() {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
         throw new Error('غير مصرح');
     }
-    return session.user.id;
+    return (session!.user as any).id as string;
 }
 
 export async function getGameSessions() {
-    await connectDB();
+    const db = await getDB();
     const teacherId = await getTeacherId();
 
-    // We need to fetch sessions and populate the student info
-    // Wait, Student is a separate model. Ensure it's registered.
-    await Student.findOne(); // trick to register model in mongoose
+    const sessions = await db
+        .prepare(
+            `SELECT gs.*, s.name as student_name_from_table, s.grade
+             FROM game_sessions gs
+             LEFT JOIN students s ON gs.studentId = s.id
+             WHERE gs.teacherId = ?
+             ORDER BY gs.date DESC`
+        )
+        .bind(teacherId)
+        .all<any>();
 
-    const sessions = await GameSession.find({ teacherId })
-        .populate('studentId', 'name grade')
-        .sort({ date: -1 });
-
-    return JSON.parse(JSON.stringify(sessions));
+    return sessions.results.map((s: any) => ({
+        ...s,
+        studentId: s.studentId ? {
+            _id: s.studentId,
+            name: s.student_name_from_table || s.studentName,
+            grade: s.grade,
+        } : null,
+    }));
 }

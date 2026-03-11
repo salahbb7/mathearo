@@ -1,47 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
-import Teacher from '@/models/Teacher';
-import ClassGroup from '@/models/ClassGroup';
-import Student from '@/models/Student';
+import { getDB } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 export async function GET() {
     try {
-        await connectDB();
-        const users = await Teacher.find({}, '-password').sort({ createdAt: -1 });
+        const db = await getDB();
 
-        const usersWithCounts = await Promise.all(users.map(async (user) => {
-            const u = user.toObject();
-            if ((u.role as string) === 'admin') u.role = 'superadmin' as any;
+        const teachers = await db
+            .prepare('SELECT id, name, email, role, isActive, plan, createdAt FROM teachers ORDER BY createdAt DESC')
+            .all<any>();
 
-            // Get classes for this teacher
-            const classes = await ClassGroup.find({ teacherId: user._id });
-            const classCount = classes.length;
+        const usersWithCounts = await Promise.all(
+            teachers.results.map(async (teacher: any) => {
+                const classes = await db
+                    .prepare('SELECT id, name FROM class_groups WHERE teacherId = ?')
+                    .bind(teacher.id)
+                    .all<any>();
 
-            // Get total students for this teacher
-            const studentCount = await Student.countDocuments({ teacherId: user._id });
+                const studentCount = await db
+                    .prepare('SELECT COUNT(*) as count FROM students WHERE teacherId = ?')
+                    .bind(teacher.id)
+                    .first<{ count: number }>();
 
-            // Get per-class student counts
-            const classesWithStudentCounts = await Promise.all(classes.map(async (cls) => {
-                const count = await Student.countDocuments({
-                    teacherId: user._id,
-                    grade: cls.name
-                });
+                const classesWithCounts = await Promise.all(
+                    classes.results.map(async (cls: any) => {
+                        const count = await db
+                            .prepare('SELECT COUNT(*) as count FROM students WHERE teacherId = ? AND grade = ?')
+                            .bind(teacher.id, cls.name)
+                            .first<{ count: number }>();
+                        return { name: cls.name, studentCount: count?.count || 0 };
+                    })
+                );
+
                 return {
-                    name: cls.name,
-                    studentCount: count
+                    ...teacher,
+                    isActive: teacher.isActive === 1,
+                    statistics: {
+                        classCount: classes.results.length,
+                        studentCount: studentCount?.count || 0,
+                        classes: classesWithCounts,
+                    },
                 };
-            }));
-
-            return {
-                ...u,
-                statistics: {
-                    classCount,
-                    studentCount,
-                    classes: classesWithStudentCounts
-                }
-            };
-        }));
+            })
+        );
 
         return NextResponse.json(usersWithCounts);
     } catch (error) {
@@ -52,41 +53,35 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
-        await connectDB();
+        const db = await getDB();
         const body = await request.json();
 
-        // Validate required fields
         if (!body.email || !body.password || !body.name) {
-            return NextResponse.json(
-                { error: 'جميع الحقول مطلوبة (الاسم، البريد، كلمة المرور)' },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: 'جميع الحقول مطلوبة (الاسم، البريد، كلمة المرور)' }, { status: 400 });
         }
 
-        // Check if user already exists
-        const existingUser = await Teacher.findOne({ email: body.email });
-        if (existingUser) {
-            return NextResponse.json(
-                { error: 'البريد الإلكتروني مسجل بالفعل' },
-                { status: 400 }
-            );
+        const existing = await db
+            .prepare('SELECT id FROM teachers WHERE email = ? LIMIT 1')
+            .bind(body.email)
+            .first<{ id: string }>();
+
+        if (existing) {
+            return NextResponse.json({ error: 'البريد الإلكتروني مسجل بالفعل' }, { status: 400 });
         }
 
-        // Hash password
         const hashedPassword = await bcrypt.hash(body.password, 10);
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+        const role = body.role === 'admin' ? 'superadmin' : (body.role || 'teacher');
 
-        const user = await Teacher.create({
-            name: body.name,
-            email: body.email,
-            password: hashedPassword,
-            role: (body.role === 'admin' ? 'superadmin' : body.role) || 'teacher',
-            plan: body.plan || 'test',
-        });
+        await db
+            .prepare(
+                'INSERT INTO teachers (id, name, email, password, role, isActive, plan, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )
+            .bind(id, body.name, body.email, hashedPassword, role, 1, body.plan || 'test', now, now)
+            .run();
 
-        const { ...userWithoutPassword } = user.toObject();
-        delete userWithoutPassword.password; // Manually remove password from response
-
-        return NextResponse.json(userWithoutPassword, { status: 201 });
+        return NextResponse.json({ id, name: body.name, email: body.email, role, plan: body.plan || 'test' }, { status: 201 });
     } catch (error) {
         console.error('Error creating user:', error);
         return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });

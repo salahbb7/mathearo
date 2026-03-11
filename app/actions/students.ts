@@ -1,28 +1,30 @@
 'use server';
 
-import { connectDB } from '@/lib/db';
-import Student from '@/models/Student';
+import { getDB } from '@/lib/db';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { revalidatePath } from 'next/cache';
 
 async function getTeacherId() {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
         throw new Error('غير مصرح');
     }
-    return session.user.id;
+    return (session!.user as any).id as string;
 }
 
 export async function getStudents() {
-    await connectDB();
+    const db = await getDB();
     const teacherId = await getTeacherId();
-    const students = await Student.find({ teacherId }).sort({ createdAt: -1 });
-    return JSON.parse(JSON.stringify(students));
+    const result = await db
+        .prepare('SELECT * FROM students WHERE teacherId = ? ORDER BY createdAt DESC')
+        .bind(teacherId)
+        .all<any>();
+    return result.results;
 }
 
 export async function addStudent(formData: FormData) {
-    await connectDB();
+    const db = await getDB();
     const teacherId = await getTeacherId();
     const name = formData.get('name') as string;
     const grade = formData.get('grade') as string;
@@ -31,19 +33,26 @@ export async function addStudent(formData: FormData) {
         throw new Error('اكمل جميع الحقول');
     }
 
-    await Student.create({ name, grade, teacherId });
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    await db
+        .prepare('INSERT INTO students (id, name, grade, teacherId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(id, name, grade, teacherId, now, now)
+        .run();
+
     revalidatePath('/dashboard/students');
 }
 
 export async function deleteStudent(id: string) {
-    await connectDB();
+    const db = await getDB();
     const teacherId = await getTeacherId();
-    await Student.findOneAndDelete({ _id: id, teacherId });
+    await db.prepare('DELETE FROM students WHERE id = ? AND teacherId = ?').bind(id, teacherId).run();
     revalidatePath('/dashboard/students');
 }
 
 export async function editStudent(id: string, formData: FormData) {
-    await connectDB();
+    const db = await getDB();
     const teacherId = await getTeacherId();
     const name = formData.get('name') as string;
     const grade = formData.get('grade') as string;
@@ -52,6 +61,11 @@ export async function editStudent(id: string, formData: FormData) {
         throw new Error('اكمل جميع الحقول');
     }
 
-    await Student.findOneAndUpdate({ _id: id, teacherId }, { name, grade });
+    const now = new Date().toISOString();
+    await db
+        .prepare('UPDATE students SET name=?, grade=?, updatedAt=? WHERE id=? AND teacherId=?')
+        .bind(name, grade, now, id, teacherId)
+        .run();
+
     revalidatePath('/dashboard/students');
 }

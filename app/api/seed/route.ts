@@ -1,36 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
-import Teacher from '@/models/Teacher';
+import { getDB } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request: NextRequest) {
     try {
-        await connectDB();
+        const db = await getDB();
 
-        // Check if superadmin already exists
-        const existingAdmin = await Teacher.findOne({ email: 'superadmin@school.com' });
+        const existing = await db
+            .prepare("SELECT id FROM teachers WHERE email = 'superadmin@school.com' LIMIT 1")
+            .first<{ id: string }>();
 
-        if (existingAdmin) {
+        if (existing) {
             return NextResponse.json({ message: 'المستخدم موجود بالفعل' }, { status: 400 });
         }
 
-        // Create superadmin teacher
         const hashedPassword = await bcrypt.hash('admin123', 10);
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
 
-        const admin = await Teacher.create({
-            email: 'superadmin@school.com',
-            password: hashedPassword,
-            name: 'المدير العام',
-            role: 'superadmin',
-        });
+        await db
+            .prepare(
+                'INSERT INTO teachers (id, name, email, password, role, isActive, plan, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )
+            .bind(id, 'المدير العام', 'superadmin@school.com', hashedPassword, 'superadmin', 1, 'pro', now, now)
+            .run();
 
-        return NextResponse.json({
-            message: 'تم إنشاء حساب المعلم بنجاح',
-            teacher: {
-                email: admin.email,
-                name: admin.name,
-            }
-        }, { status: 201 });
+        return NextResponse.json(
+            { message: 'تم إنشاء حساب المدير بنجاح', teacher: { email: 'superadmin@school.com', name: 'المدير العام' } },
+            { status: 201 }
+        );
     } catch (error) {
         console.error('Error creating admin:', error);
         return NextResponse.json({ error: 'Failed to create admin user' }, { status: 500 });

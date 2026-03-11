@@ -2,18 +2,18 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { connectDB } from '@/lib/db';
-import GameSettings from '@/models/GameSettings';
+import { getDB } from '@/lib/db';
 
 async function getWhatsappNumber(): Promise<string> {
   try {
-    await connectDB();
-    const settings = await GameSettings.findOne().lean() as any;
+    const db = await getDB();
+    const settings = await db.prepare('SELECT whatsappNumber FROM game_settings WHERE id = ? LIMIT 1').bind('global').first<any>();
     return settings?.whatsappNumber || '96871776166';
   } catch {
     return '96871776166';
   }
 }
+
 
 export default async function Home() {
   const session = await getServerSession(authOptions);

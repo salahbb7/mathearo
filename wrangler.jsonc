@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "mathearo-app",
+  "name": "mathearo",
   "main": ".open-next/worker.js",
   "minify": true,
   "compatibility_date": "2025-01-01",
@@ -11,6 +11,13 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mathearo-db",
+      "database_id": "a38d0253-8966-4d4c-b4e5-d9903f99c73d"
+    }
+  ],
   "observability": {
     "enabled": true
   }

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
-import Teacher from '@/models/Teacher';
+import { getDB } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
 export async function PUT(
@@ -8,40 +7,44 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        await connectDB();
+        const db = await getDB();
         const body = await request.json();
         const { id } = await params;
-        const user = await Teacher.findById(id);
+
+        const user = await db
+            .prepare('SELECT * FROM teachers WHERE id = ? LIMIT 1')
+            .bind(id)
+            .first<any>();
 
         if (!user) {
             return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 });
         }
 
-        user.name = body.name || user.name;
-        user.email = body.email || user.email;
-        let newRole: string = body.role || user.role;
-        if (newRole === 'admin') {
-            newRole = 'superadmin';
-        }
-        user.role = newRole as 'superadmin' | 'teacher';
-        user.plan = body.plan || user.plan;
+        const name = body.name || user.name;
+        const email = body.email || user.email;
+        let role = body.role || user.role;
+        if (role === 'admin') role = 'superadmin';
+        const plan = body.plan || user.plan;
+        const isActive = body.isActive !== undefined ? (body.isActive ? 1 : 0) : user.isActive;
+        const now = new Date().toISOString();
 
-        user.isActive = body.isActive !== undefined ? body.isActive : user.isActive;
-
-        // Only update password if provided
         if (body.password) {
-            user.password = await bcrypt.hash(body.password, 10);
+            const hashedPassword = await bcrypt.hash(body.password, 10);
+            await db
+                .prepare('UPDATE teachers SET name=?, email=?, role=?, plan=?, isActive=?, password=?, updatedAt=? WHERE id=?')
+                .bind(name, email, role, plan, isActive, hashedPassword, now, id)
+                .run();
+        } else {
+            await db
+                .prepare('UPDATE teachers SET name=?, email=?, role=?, plan=?, isActive=?, updatedAt=? WHERE id=?')
+                .bind(name, email, role, plan, isActive, now, id)
+                .run();
         }
 
-        await user.save();
-
-        const { ...userWithoutPassword } = user.toObject();
-        delete userWithoutPassword.password;
-
-        return NextResponse.json(userWithoutPassword);
+        return NextResponse.json({ id, name, email, role, plan, isActive: isActive === 1 });
     } catch (error) {
         console.error('Error updating user:', error);
-        return NextResponse.json({ error: 'فشل في تحديث المستخدم', details: error instanceof Error ? error.message : String(error) }, { status: 500 });
+        return NextResponse.json({ error: 'فشل في تحديث المستخدم' }, { status: 500 });
     }
 }
 
@@ -50,15 +53,16 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        await connectDB();
+        const db = await getDB();
         const { id } = await params;
-        const user = await Teacher.findById(id);
+
+        const user = await db.prepare('SELECT id FROM teachers WHERE id = ? LIMIT 1').bind(id).first<{ id: string }>();
 
         if (!user) {
             return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 });
         }
 
-        await Teacher.findByIdAndDelete(id);
+        await db.prepare('DELETE FROM teachers WHERE id = ?').bind(id).run();
 
         return NextResponse.json({ message: 'تم حذف المستخدم بنجاح' });
     } catch (error) {
