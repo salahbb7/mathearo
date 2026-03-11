@@ -18,9 +18,10 @@ export default function BackgroundMusicPlayer() {
     useEffect(() => {
         fetch('/api/settings')
             .then((r) => r.json())
-            .then((data) => {
-                const vol = typeof data.backgroundMusicVolume === 'number'
-                    ? data.backgroundMusicVolume
+            .then((data: unknown) => {
+                const d = data as Record<string, unknown>;
+                const vol = typeof d.backgroundMusicVolume === 'number'
+                    ? d.backgroundMusicVolume
                     : 50;
                 setVolume(vol);
                 if (audioRef.current) {
