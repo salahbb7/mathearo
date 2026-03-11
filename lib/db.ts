@@ -13,13 +13,15 @@ let conn: typeof mongoose | null = null;
 let promise: Promise<typeof mongoose> | null = null;
 
 export async function connectDB() {
-  if (conn) {
+  if (conn && mongoose.connection.readyState === 1) {
     return conn;
   }
 
-  if (!promise) {
+  if (!promise || mongoose.connection.readyState !== 2) {
     promise = mongoose.connect(MONGODB_URI, {
-      bufferCommands: false,
+      maxPoolSize: 2,
+      minPoolSize: 1,
+      serverSelectionTimeoutMS: 5000,
     }).then((m) => {
       console.log('✅ تم الاتصال بقاعدة البيانات بنجاح');
       return m;
