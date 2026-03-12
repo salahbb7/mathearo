@@ -31,16 +31,22 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     try {
         const db = await getDB();
+        const { getBucket } = await import('@/lib/db');
+        const bucket = await getBucket();
 
         let body: Record<string, unknown> = {};
         const contentType = request.headers.get('content-type') || '';
+        let formData: FormData | null = null;
 
         if (contentType.includes('application/json')) {
             body = await request.json() as any;
         } else if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
-            const formData = await request.formData();
+            formData = await request.formData();
             for (const [key, value] of formData.entries()) {
-                body[key] = value;
+                // Ignore File objects for the generic body parsing
+                if (!(value instanceof File)) {
+                    body[key] = value;
+                }
             }
         }
 
@@ -55,19 +61,43 @@ export async function POST(request: NextRequest) {
                 .run();
         }
 
-        const successSoundUrl = body.successSoundUrl !== undefined ? body.successSoundUrl : existing?.successSoundUrl || '';
-        const errorSoundUrl = body.errorSoundUrl !== undefined ? body.errorSoundUrl : existing?.errorSoundUrl || '';
-        const backgroundMusicUrl = body.backgroundMusicUrl !== undefined ? body.backgroundMusicUrl : existing?.backgroundMusicUrl || '';
+        let finalSuccessSoundUrl = body.successSoundUrl !== undefined ? (body.successSoundUrl as string) : existing?.successSoundUrl || '';
+        let finalErrorSoundUrl = body.errorSoundUrl !== undefined ? (body.errorSoundUrl as string) : existing?.errorSoundUrl || '';
+        let finalBackgroundMusicUrl = body.backgroundMusicUrl !== undefined ? (body.backgroundMusicUrl as string) : existing?.backgroundMusicUrl || '';
+
+        if (formData) {
+            const successFile = formData.get('successSound');
+            if (successFile && successFile instanceof File && successFile.size > 0) {
+                const fileKey = `settings/global/success_${Date.now()}_${successFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+                await bucket.put(fileKey, await successFile.arrayBuffer(), { httpMetadata: { contentType: successFile.type } });
+                finalSuccessSoundUrl = `/api/files/${fileKey}`;
+            }
+
+            const errorFile = formData.get('errorSound');
+            if (errorFile && errorFile instanceof File && errorFile.size > 0) {
+                const fileKey = `settings/global/error_${Date.now()}_${errorFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+                await bucket.put(fileKey, await errorFile.arrayBuffer(), { httpMetadata: { contentType: errorFile.type } });
+                finalErrorSoundUrl = `/api/files/${fileKey}`;
+            }
+
+            const musicFile = formData.get('backgroundMusic');
+            if (musicFile && musicFile instanceof File && musicFile.size > 0) {
+                const fileKey = `settings/global/music_${Date.now()}_${musicFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+                await bucket.put(fileKey, await musicFile.arrayBuffer(), { httpMetadata: { contentType: musicFile.type } });
+                finalBackgroundMusicUrl = `/api/files/${fileKey}`;
+            }
+        }
+
         const backgroundMusicVolume = body.backgroundMusicVolume !== undefined ? Math.min(100, Math.max(0, parseFloat(body.backgroundMusicVolume as string) || 50)) : existing?.backgroundMusicVolume || 50;
-        const difficulty = (body.difficulty && ['easy', 'medium', 'hard'].includes(body.difficulty as string)) ? body.difficulty : (existing?.difficulty || 'medium');
+        const difficulty = (body.difficulty && ['easy', 'medium', 'hard'].includes(body.difficulty as string)) ? body.difficulty as string : (existing?.difficulty || 'medium');
         const whatsappNumber = body.whatsappNumber !== undefined ? (body.whatsappNumber as string).trim() : (existing?.whatsappNumber || '96871776166');
 
         await db
             .prepare('UPDATE game_settings SET successSoundUrl=?, errorSoundUrl=?, backgroundMusicUrl=?, backgroundMusicVolume=?, difficulty=?, whatsappNumber=?, updatedAt=? WHERE id=?')
-            .bind(successSoundUrl, errorSoundUrl, backgroundMusicUrl, backgroundMusicVolume, difficulty, whatsappNumber, now, 'global')
+            .bind(finalSuccessSoundUrl, finalErrorSoundUrl, finalBackgroundMusicUrl, backgroundMusicVolume, difficulty, whatsappNumber, now, 'global')
             .run();
 
-        return NextResponse.json({ id: 'global', successSoundUrl, errorSoundUrl, backgroundMusicUrl, backgroundMusicVolume, difficulty, whatsappNumber, updatedAt: now });
+        return NextResponse.json({ id: 'global', successSoundUrl: finalSuccessSoundUrl, errorSoundUrl: finalErrorSoundUrl, backgroundMusicUrl: finalBackgroundMusicUrl, backgroundMusicVolume, difficulty, whatsappNumber, updatedAt: now });
     } catch (error) {
         console.error('Error updating settings:', error);
         return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });

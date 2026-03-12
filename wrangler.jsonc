@@ -18,6 +18,12 @@
       "database_id": "a38d0253-8966-4d4c-b4e5-d9903f99c73d"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "mathearo-bucket"
+    }
+  ],
   "observability": {
     "enabled": true
   }
